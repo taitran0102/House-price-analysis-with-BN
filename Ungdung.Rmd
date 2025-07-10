@@ -1,0 +1,359 @@
+---
+title: "Ứng dụng của mô hình đồ thị có hướng"
+output:
+  html_notebook:
+    toc: true
+    fig_width: 3
+    fig_height: 3
+    fig_caption: true
+  html_document:
+    toc: true
+    df_print: paged
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: inline
+---
+
+**SÁCH Bayesian Networks With Examples in**
+
+# Thư viện
+
+```{r echo=TRUE}
+library(gRbase)
+library(Rgraphviz)
+library(bnlearn)
+library(ggm)
+library(igraph)
+library(dplyr)
+library(gRain)
+```
+
+# DỰ ĐOÁN THÀNH PHẦN CƠ THỂ - Predicting the Body Composition
+
+Thành phần cơ thể người là sự phân bố của ba thành phần tạo nên trọng lượng cơ thể: xương, mỡ và khối nạc (bone,fat,lean). Chúng lần lượt đại diện cho hàm lượng khoáng (mineral content), lượng mỡ (fat) và khối lượng còn lại của cơ thể (chủ yếu là cơ bắp).
+
+Trong một phân tích chi tiết, *body composition* được đo riêng biệt ở phần thân (*trunk*), chân (*legs*) và tay (*arms*), và đây là một công cụ chẩn đoán quan trọng vì tỷ lệ giữa các khối lượng này có thể tiết lộ những rối loạn sinh lý theo vùng.
+
+Một trong những phương pháp phổ biến nhất để đo các khối lượng này là *dual-energy x-ray absorptiometry* (*DXA*; *Centers for Disease Control and Prevention*, 2010), tuy nhiên phương pháp này tốn nhiều thời gian và rất đắt đỏ. Do đó, có một sự quan tâm đến các *protocols* thay thế có thể được sử dụng với hiệu quả tương đương.
+
+Trong phần sau, chúng ta sẽ cố gắng theo cách đơn giản để dự đoán *body composition* từ các đại lượng liên quan rẻ hơn và dễ đo lường hơn nhiều: *age*, *height*, *weight* và *waist circumference*.
+
+Để làm điều đó, chúng ta sẽ sử dụng một mẫu gồm 100 người đàn ông da trắng được thu thập từ dự án *NHANES* (*Centers for Disease Control and Prevention*, 2004), trong đó bao gồm các phép đo đồng thời cho các *variables* nêu trên.
+
+*Tập dữ liệu* này có sẵn trong `rbmn package` với tên là *`boco`*.
+
+```{r}
+library(rbmn)
+data(boco)
+round(head(boco), 1)
+
+boco$B<-boco$W/boco$H^2 *10^4
+dim(boco)
+names(boco)
+
+n<-nrow(boco)
+vr<-colnames(boco)[5:13]
+co<-c("A","H", "W", "C", "B")
+
+library(DataExplorer)
+plot_histogram(boco)
+```
+
+Đầu tiên, chúng tôi tính *body mass index* (*B*) cho từng cá nhân và thêm nó vào *boco*. Đây là một chỉ số rất phổ biến, chuẩn hóa *weight* theo *height*; một cách trực quan, một người nặng 100kg sẽ có ý nghĩa sức khỏe rất khác nếu họ cao 160cm so với một người cao 185cm.
+
+Do đó, hiện tại chúng ta có một tập gồm 5 *covariates* và 9 *variables of interest* với kích thước mẫu là *n = 100*.
+
+Tên và định nghĩa của chúng được trình bày trong *Table 6.1*.
+
+## 1. Aim of the Study - Mục tiêu của nghiên cứu
+
+Một phương pháp thống kê tiêu chuẩn thường được sử dụng để dự đoán là ***multivariate multiple linear regression***. Ký hiệu các ***variables of interest*** (biến phản hồi) là $\mathbf{Y}$ và các ***covariates*** (các biến giải thích) là $\mathbf{X}$, mô hình có dạng như sau:
+
+$$
+\mathbf{Y} = \mathbf{X} \boldsymbol{\Theta} + \mathbf{E} \tag{6.6}
+$$
+
+$$
+\mathrm{V}(\mathrm{vec}(\mathbf{E})) = \mathbf{I}_n \otimes \boldsymbol{\Sigma} \tag{6.7}
+$$
+
+Trong đó:
+
+-   $\mathbf{Y}$ là ma trận $n \times p$ (biến phản hồi);
+
+-   $\mathbf{X}$ là ma trận $n \times (q+1)$ (bao gồm một cột toàn số 1 để ước lượng hệ số chặn *intercept* cùng với các *covariates*);
+
+-   $\boldsymbol{\Theta}$ là ma trận $(q+1) \times p$ chứa các *regression coefficients*;
+
+-   $\mathbf{E}$ là ma trận $n \times p$ chứa các *error terms*;
+
+-   $\boldsymbol{\Sigma}$ là ma trận hiệp phương sai $p \times p$ cho các *error terms*;
+
+-   $n$ là số lượng *observations*;
+
+-   $p$ là số lượng *variables*; và
+
+-   $q$ là số lượng *covariates*.
+
+Số lượng *parameters* là $p(q + 1)$ cho các *regression coefficients* và $\dfrac{p(p + 1)}{2}$ cho *covariance matrix* của các *error terms*. Khi $p$ và $q$ lớn, $n$ cần phải lớn hơn nữa để cung cấp đủ sức mạnh dự đoán. Tất nhiên, một điều đã được biết rõ là *covariances* khó ước lượng từ dữ liệu hơn so với giá trị trung bình.
+
+Việc sử dụng *BNs* có thể là một cách hiệu quả để giảm đáng kể số lượng *parameters* trong mô hình và do đó giảm yêu cầu về kích thước mẫu. Cụ thể hơn, một *GBN* được xác định trên $p$ *variables* và $q$ *covariates*, với $n_c$ *arcs* từ các *covariates* đến các *variables* và $n_v$ *arcs* giữa các *variables*, thì sẽ chỉ có $2p + n_c + n_v$ *parameters*, và vẫn phù hợp với các phương trình:
+
+$$
+\mathbf{Y} = \mathbf{X} \boldsymbol{\Theta} + \mathbf{E} \tag{6.6}
+$$
+
+$$
+\mathrm{V}(\mathrm{vec}(\mathbf{E})) = \mathbf{I}_n \otimes \boldsymbol{\Sigma} \tag{6.7}
+$$
+
+Thật vậy, phương trình (6.7) có thể được diễn giải như một mô hình *saturated(bảo hòa) GBN* (ví dụ: tất cả các *arcs* có thể có đều xuất hiện trong *DAG*) trong đó vai trò của *variables* và *covariates* được nhấn mạnh. Vì vậy, ta có thể kỳ vọng hợp lý rằng một *sparse (thưa) GBN* sẽ cho kết quả dự đoán tốt hơn khi kích thước mẫu quá nhỏ đối với phương pháp *multivariate multiple regression* tiêu chuẩn.
+
+
+Với mục tiêu dự đoán chín *variables* bằng năm *covariates* trong *Table 6.1*, chúng tôi sẽ trình bày một ví dụ về cách học một *GBN* như vậy. Có thể lập luận rằng *W* (weight) và *H* (height) làm cho *B* (BMI) trở nên dư thừa, nhưng mối quan hệ giữa chúng không tuyến tính, do đó chúng truyền tải thông tin khác nhau trong một mô hình tuyến tính.
+
+## 2. Designing the Predictive Approach - Thiết kế Phương thức Dự Đoán
+
+### 2.1. Assessing the Quality of a Predictor - 
+Đánh giá chất lượng của một *predictor*
+
+Trước tiên, chúng ta sẽ **chia *data* thành hai tập**: ***training set*** **(*dtr*)** và ***validation set*** **(*dva*)**. [***Training set*** **sẽ được dùng để học hoặc ước lượng các *models***]{.underline}; còn [***validation set sẽ được dùng để lựa chọn những models thực hiện việc dự đoán tốt cho các cá nhân mới***]{.underline}, từ đó giúp **giảm nguy cơ *overfitting*** (Hastie et al., 2009).
+
+Ở đây, chúng ta sẽ sử dụng một cách chia ngẫu nhiên thành hai *sets* có kích thước bằng nhau, mỗi *set* gồm 50 cá nhân.
+
+```{r}
+set.seed(42)
+sub <- split(sample(n), c("train", "validation"))
+dtr <- boco[sub$train, ]
+dva <- boco[sub$validation, ]
+```
+
+Chúng ta cũng phải xử lý vấn đề *bias-variance trade-off* trong dự đoán. Độ chênh lệch giữa giá trị quan sát được và giá trị trung bình dự đoán sẽ phản ánh *bias*; *standard deviation* sẽ được xác định bởi độ lệch chuẩn của *predictor*.
+
+Đối với mỗi *variable*, *standard error of prediction* (*SEP*) sẽ được tính theo công thức cổ điển:
+
+$\mathrm{SEP} = \sqrt{\text{bias}^2 + \text{standard deviation}^2} \tag{6.8}$
+
+Một yếu tố quan trọng khác khi lựa chọn *model* để dự đoán là mức độ dễ hiểu (*interpretability*) của nó đối với các chuyên gia trong lĩnh vực. Khi các đặc tính thống kê tương đương nhau, những *models* giúp làm sáng tỏ hiện tượng đang được nghiên cứu thường được ưu tiên hơn so với các *empirical*, *black-box models*.
+
+Trong ngữ cảnh của *BNs*, các *models* có ít *arcs*, và các *arcs* có ý nghĩa sinh lý học liên quan đến *body composition* sẽ hấp dẫn hơn so với *saturated model* trong các phương trình (6.6) và (6.7).
+
+Về mặt này, chúng tôi hy vọng rằng các mối quan hệ phức tạp giữa các *variables* sẽ biến mất sau khi đưa vào những *covariates* tốt.
+
+Nói cách khác: có thể tồn tại các *complex marginal dependencies* nhưng chỉ có *simple conditional dependencies*, và trong trường hợp lý tưởng là *conditional independence*.
+
+
+### 2.2. The Saturated BN
+
+Để có một điểm tham chiếu (*term of comparison*) cho các *models* mà chúng ta sẽ xây dựng ở phần sau, giờ đây chúng ta xét trường hợp tương đương với *multiple regression* của một *saturated BN* (trong đó có tất cả các *arcs* có thể giữa các *variables* và/hoặc *covariates*).
+
+```{r}
+satua <- lm(cbind(TF, LF, AF, TL, LL, AL, TB, LB, AB) ~ A + H + W + C + B, data = dtr)
+
+#summary(satua)
+
+r.dof <- anova(satua)["Residuals", "Df"]
+
+satup <- predict(satua, newdata = dva)
+
+satabias <- abs(dva[, vr]- satup)
+
+satstdev <- outer(rep(1,nrow(dtr)),sqrt(colSums(residuals(satua)^2)/r.dof), "*")
+
+satsep <- sqrt(satabias^2 + satstdev^2)
+
+satgsco <- cbind(colMeans(satabias), colMeans(satstdev), colMeans(satsep))
+
+colnames(satgsco) <- c("|Bias|", "Sd.Dev", "SEP")
+
+round(satgsco, 2)
+```
+```{r}
+satsupe <- colSums(satgsco)
+round(satsupe, 2)
+```
+
+Kết quả phía trên cho thấy *cumulated SEP* là 10.00 (trong sách là 10.19) trên 9 *variables*, với *bias* là 6.19 (5.97) và *standard deviation* là 7.03 (7.51). Ba giá trị này không thỏa mãn phương trình (6.8), vì chúng ta đang cộng dồn *SEP* cho tất cả các cá nhân và *variables* được dự đoán, trong khi định nghĩa của *SEP* không mang tính chất cộng dồn (*not additive*).
+
+*Saturated GBN* có 36 *arcs* giữa các *variables* và 45 *arcs* từ các *covariates* đến các *variables*.
+
+### 2.3. Convenient BNs
+
+*Tập training* `dtr` cũng có thể được sử dụng để học một *GBN* bằng một trong các *algorithms* có sẵn trong gói **bnlearn**, như minh họa dưới đây.
+
+```{r}
+library(bnlearn)
+dag1 <- hc(dtr)
+paste(substr(modelstring(dag1), 1, 40), "...", sep = "")
+```
+Tuy nhiên, lần thử đầu tiên học *GBN* này không tạo ra một *DAG* thuận tiện cho việc dự đoán. Chúng ta sẽ ưu tiên có các *covariates* làm *ancestors* của các *response variables*, để có thể ngay lập tức xác định được phân phối xác suất có điều kiện của chúng. Trường hợp này không xảy ra vì biến *AB* lại là *parent* của *covariate* *H*.
+
+Như đã thấy ở Chương 4, chúng ta hoàn toàn có thể sử dụng cách *conditioning* khác với thứ tự *topological order*; cấu trúc đơn giản của *BN* vẫn có thể hỗ trợ trong việc dự đoán. Nhưng điều này sẽ đòi hỏi các phép tính phức tạp và chúng ta sẽ không đi theo cách này, mà ưu tiên các *BNs* trong đó tất cả các *covariates* là *ancestors* của tất cả các biến mà chúng ta muốn dự đoán.
+
+*Blacklists* và *whitelists* cung cấp một cách đơn giản để áp đặt các ràng buộc này lên cấu trúc mạng khi học *GBN*. Ràng buộc mạnh nhất là buộc mỗi *covariate* phải là *parent* của mỗi *response variable*; nghĩa là phải có $5 \times 9$ *arcs* trong *DAG*.
+
+```{r}
+wl1 <- cbind(from = rep(co, each = 9), to = rep(vr, 5))
+dag2 <- hc(dtr, whitelist = wl1)
+paste(substr(modelstring(dag2), 1, 40), "...", sep = "")
+
+plot(dag2)
+```
+Như dự đoán, các *covariates* nằm ở vị trí đầu tiên trong thứ tự *topological* của *DAG*. Để nới lỏng các ràng buộc trong quá trình tìm kiếm, chúng ta có thể chuyển từ *whitelist* `wl1` sang một *blacklist* chỉ ngăn chặn các *arcs* không mong muốn.
+
+Nói cách khác, các *variables* không được phép làm *parents* của *covariates*, nhưng các *covariates* không nhất thiết phải là *parents* của tất cả các *variables*.
+
+```{r}
+bl1 <- wl1[, 2:1]
+dag3 <- hc(dtr, blacklist = bl1)
+paste(substr(modelstring(dag3), 1, 40), "...", sep = "")
+
+all.equal(dag2, dag3)
+```
+
+
+*Cấu trúc DAG* thu được có phần tương tự đối với các *covariates* nhưng khác biệt đối với các *response variables*. Thực tế, mọi kết hợp của hai danh sách này đều có thể xảy ra, và bất kỳ sự chồng lấn nào giữa *whitelist* và *blacklist* đều được thuật toán `hc` xử lý một cách chính xác.
+
+
+```{r}
+iwl <- 1:15
+wl2 <- wl1[iwl, ]
+bl2 <- bl1[-iwl, ]
+dag4 <- hc(dtr, whitelist = wl2, blacklist = bl2)
+paste(substr(modelstring(dag4), 1, 40), "...", sep = "")
+```
+Điều quan trọng cần lưu ý là chúng ta không quá quan tâm đến phân phối của các *covariates* vì chúng sẽ được giả định là biết trước cho mục đích dự đoán. Rõ ràng, các tương tác giữa các *covariates* nên được cho phép ở một mức độ nhất định để *GBN* được xác định đúng và để giới hạn *bias* trong các hệ số hồi quy liên quan đến các *covariates* trong phân phối có điều kiện của các *response variables*. Tuy nhiên, các tương tác này không ảnh hưởng trực tiếp đến việc dự đoán.
+
+Chúng ta chỉ quan tâm đến một dạng phân phối có điều kiện hiệu quả và đơn giản của:
+
+$$
+Y_1, Y_2, \ldots, Y_p \mid X_1, X_2, \ldots, X_q
+$$
+
+## 3. Looking for Candidate BNs
+
+Với những cân nhắc này, chúng ta có thể triển khai một chiến lược tìm kiếm các *BNs* dự đoán tốt. Chúng ta sẽ sử dụng điểm *SEP* theo Phương trình (6.8) cùng với hai thành phần của nó (*bias* và *standard deviation*) làm thước đo hiệu suất của *BN* trên *test set* `dva`.
+
+Ở bước đầu tiên, chúng ta ước lượng các tham số của *model* từ *training set* `dtr` sử dụng đối tượng `dag2` mà chúng ta đã tạo trong phần trước.
+
+```{r}
+bn2 <- bn.fit(dag2, data = dtr)
+```
+
+
+Sau đó, chúng ta thu được phân phối có điều kiện cho từng cá nhân trong *test set* bằng **rbmn**, và sử dụng chúng để tính *bias* và *standard deviation*. Chúng ta lưu các giá trị này trong hai *data frames* là `bias` và `stde`.
+
+```{r}
+library(rbmn)
+mn2 <- gema2mn(nbn2gema(bnfit2nbn(bn2)))
+bias <- stde <- dva[, vr]
+for (ind in 1:nrow(dva)) 
+  {
+  mni <- condi4joint(mn2, par = vr, pour = co, unlist(dva[ind, co]))
+  
+  bias[ind, vr] <- dva[ind, vr]- mni$mu[vr]
+  
+  stde[ind, vr] <- sqrt(diag(mni$gamma)[vr])
+  }#FOR
+
+sep <- sqrt(bias^2 + stde^2)
+```
+
+Một điểm số tổng thể (*global score*) có thể được tính bằng cách cộng tổng trên tất cả các quan sát trong *validation data set*.
+
+```{r}
+gscores <- cbind(colMeans(abs(bias)), colMeans(stde), colMeans(sep))
+colnames(gscores) <- c("|Bias|", "Sd.Dev", "SEP")
+round(gscores, 2)
+```
+```{r}
+superf <- colSums(gscores)
+round(superf, 2)
+```
+(có thể khác trong sách nhưng không nhiều)
+
+Những kết quả này rất khả quan so với kết quả từ *saturated GBN* (597, 751, 1019) nếu xét rằng chúng ta đang sử dụng ít tham số hơn nhiều (84 thay vì 105). Tuy nhiên, như đã đề cập trước đó, cũng rất quan trọng để kiểm tra xem `dag2` có dễ giải thích hay không.
+
+Vì vậy, chúng ta có thể vẽ `dag2` với bố cục thuận tiện cho các nút tương ứng với 3 × 3 biến và 5 *covariates*.
+
+```{r}
+library(graph)
+library(igraph)
+load("bc.poco.rda")
+cbind(posi, colo)[c(1:3, 10:11), ]
+```
+```{r}
+idag2 <- igraph.from.graphNEL(as.graphNEL(dag2))
+nad <- V(idag2)$label <- V(idag2)$name
+edcol <- rep("lightgrey", nrow(arcs(dag2)))
+aa <- which((arcs(dag2)[, 1] %in% vr) & (arcs(dag2)[, 2] %in% vr))
+va <- as.numeric(E(idag2, P = t(arcs(dag2)[aa, ])))
+edcol[va] <- "black"
+#pdf("dag2.pdf",   width = 8, height = 6)  
+plot(idag2, layout = posi[nad, ], main = "DAG 2", edge.color = edcol, vertex.color = colo[nad])
+#dev.off()
+```
+
+  Biểu đồ được tạo ra bởi đoạn mã trên được trình bày trong Hình 6.8. Không có cấu trúc hệ thống rõ ràng nào xuất hiện, và một *DAG* thưa thớt hơn với điểm *SEP* tương đương chắc chắn sẽ được ưu tiên hơn. Đáng tiếc là việc sử dụng *blacklist* `bl1` thay vì *whitelist* `wl1` không cải thiện đáng kể tình hình.
+
+Mặt khác, việc chuyển đổi phương pháp học cấu trúc từ thuật toán dựa trên điểm số (*score-based*) sang thuật toán lai (*hybrid*) lại có tác động lớn, như có thể thấy trong Hình 6.9.
+
+Trước hết, số lượng *arcs* giữa các biến giảm đi. Thêm vào đó, cấu trúc hai chiều của các vùng (trunk, legs, arms) × (lean, fat, bone) được nhận biết rõ ràng. *GBN* được học với `rsmax2` và *whitelist* trông khá hứa hẹn vì chỉ còn một *arc* giữa các biến, và nó liên kết những biến ít thú vị về mặt sinh lý hơn (khối lượng xương không biến động nhiều như khối lượng mỡ).
+
+Tuy nhiên, tất cả các biến đều phụ thuộc vào tất cả các *covariates* do *whitelist*, điều này không thực sự mong muốn khi hướng tới một mô hình giản lược (*parsimonious*).
+
+Do đó, chúng ta tự hỏi liệu có cần sử dụng tất cả các *covariates* để có được dự đoán tốt hay không. Để điều tra sâu hơn, chúng ta giới thiệu một số hạn chế đối với các *arcs* liên kết các biến, hoặc bằng cách sử dụng *whitelist* (để xem liệu có cần thêm nhiều *arcs* hơn không), hoặc bằng cách sử dụng *blacklist* (để ngăn chặn một số *arc* xuất hiện); và đồng thời chúng ta vẫn cấm các *arc* từ biến đến *covariate*.
+
+Dựa trên lý thuyết cơ bản, chúng ta giả định rằng có điều kiện theo *covariates*:
+
+* *Lean* và *fat* vẫn giữ mối tương quan (các *arcs* giữa TL, LL, AL và TF, LF, AF).
+* *Lean* và *bone* vẫn giữ mối tương quan (các *arcs* giữa TL, LL, AL và TB, LB, AB).
+* *Fat* và *bone* điều kiện độc lập với *lean* (không có *arcs* giữa TF, LF, AF và TB, LB, AB).
+* Trọng lượng *trunk* ảnh hưởng đến trọng lượng *leg* vì chân mang phần cơ thể mà phần *trunk* là phần quan trọng nhất (các *arcs* giữa TB, TF, TL và LB, LF, LL).
+* Các bộ phận phụ khác cũng liên quan đến *trunk* (các *arcs* giữa TB, TF, TL và AB, AF, AL).
+* Không có *arc* trực tiếp giữa LB, LF, LL và AB, AF, AL.
+
+Các *arcs* tương ứng với những giả định này và được đưa vào *whitelist* `iwl` hoặc *blacklist* `ibl` được thể hiện trong Hình 6.10.
+
+*Whitelist* bắt buộc tất cả các *arcs* có ý nghĩa rõ ràng phải xuất hiện trong *DAG*, đồng thời cho phép thêm các *arcs* khác.
+*Blacklist* ngăn chặn tất cả các *arcs* không có ý nghĩa rõ ràng được đưa vào *DAG*, bất kể hướng của chúng, và được thiết kế để bổ sung cho *whitelist*.
+
+Bảng 6.2 tóm tắt các *BNs* mà chúng ta đã tạo trước đó và những *BNs* thu được từ việc tìm kiếm hệ thống với 6 tập con của *covariates* (bao gồm tập đầy đủ) và với hai thuật toán (mmhc và rsmax2, được gọi với các tham số mặc định), sử dụng hoặc *whitelist* hoặc *blacklist* như trên.
+
+Thuật toán `rsmax2` được triển khai sử dụng *Grow-Shrink* (gs) trong pha giới hạn (*restrict*) và *hill-climbing* (hc) trong pha tối đa hóa (*maximise*).
+
+Chất lượng của từng *BN* này được đánh giá bằng ba điểm số cùng với số lượng các *arcs* giữa *covariate* và biến hoặc giữa hai biến.
+
+Mối tương quan giữa bias và standard deviation trên tất cả các BNs, ngoại trừ BN saturated, là rất cao (0.993) và cho thấy rằng cả hai tiêu chí này tương đương với nhau cũng như với global SEP.
+
+Để có một cái nhìn tổng hợp về chất lượng của các mô hình khác nhau, chúng ta đã vẽ điểm số SEP của chúng theo tổng số arcs trong Hình 6.11. Bốn trong số đó được ký hiệu bằng tam giác và trông đặc biệt thú vị; chúng được in đậm trong Bảng 6.2. Ba trong số chúng có cùng điểm SEP. Có thể một lựa chọn hợp lý là giữ lại GBN với số lượng covariates nhỏ nhất, tức là <10>, được hiển thị trong Hình 6.12. BN saturated cung cấp khả năng dự đoán tốt nhưng lại là mô hình khó giải thích nhất, và không ngạc nhiên khi thấy rằng nó bị ba BN khác vượt trội về tiêu chí SEP.
+
+Việc giải thích BN được chọn khá trực quan. Chiều cao và cân nặng ảnh hưởng trực tiếp đến lean mass của trunk (TL), và từ đó ảnh hưởng đến hai phần lean còn lại (LL và AL), tất cả đều nằm cạnh nhau. Điều tương tự cũng đúng với hai thành phần còn lại: TF, LF và AF; cùng với TB, LB và AB. Các vùng thành phần liên kết trực tiếp trong cùng một thành phần, với trunk là trung tâm. Cuối cùng, một hiệu chỉnh quan trọng được cung cấp bởi vòng eo (waist circumference, C) lên lượng mỡ của trunk (TF), và điều này có ảnh hưởng lan tỏa đến hai nút fat còn lại.
+
+Tỷ lệ phương sai được giải thích cho mỗi biến bởi các parent của nó cung cấp một đánh giá định lượng cục bộ về chất lượng của BN. Để tính toán, ta có thể dùng tổng bình phương của phân tích phương sai tương ứng, ví dụ với biến TL:
+
+```{r}
+av.tl <- anova(lm(TL ~ H + W, data = dva))
+1- av.tl["Residuals", "Sum Sq"] / sum(av.tl[, "Sum Sq"])
+```
+Bảng 6.3 báo cáo các tỷ lệ này cho tất cả các biến. Chúng khá tốt, ngoại trừ TB (0.59) và LF (0.69). Tuy nhiên, cần lưu ý rằng việc lựa chọn các parent có phần tùy ý vì có thể sử dụng các DAG tương đương khác nhau; chúng ta dựa vào lựa chọn của chuyên gia. Hơn nữa, cần nhấn mạnh rằng các tỷ lệ này không đo lường chất lượng của các dự đoán, chúng chỉ đánh giá độ mạnh của các cung (arcs) được bao gồm trong BN. Các tỷ lệ này chỉ trùng khớp khi tất cả các parent của một node đều là covariates, như trường hợp của TL.
+
+
+
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
