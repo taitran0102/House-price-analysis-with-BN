@@ -14,8 +14,7 @@ This project applies **Bayesian Networks** (Directed Graphical Models) to model 
 (*You can continue from here...*)
 
 ---
-##### ![RStudio](https://img.shields.io/badge/RStudio-75AADB?style=for-the-badge&logo=rstudio&logoColor=white)
-Phase 1
+##### Phase 1
 
 ---
 ##### Phase 2
