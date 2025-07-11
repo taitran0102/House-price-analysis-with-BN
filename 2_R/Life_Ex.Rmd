@@ -1,0 +1,733 @@
+---
+title: "Life Expectancy Analysis"
+output:
+  html_notebook:
+    toc: true
+    fig_width: 3
+    fig_height: 3
+    fig_caption: true
+  html_document:
+    toc: true
+    df_print: paged
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: inline
+---
+
+# Library:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(readxl)
+library(MASS)
+library(faraway)
+library(psych)
+library(car)
+library(lmtest)
+library(caret)
+library(dplyr)
+library(outliers)
+library(ModelMetrics)
+library(ggplot2)
+library(tidyverse)
+library(faraway)
+library(broom)
+library(tibble)
+library(naniar)
+library(VIM)
+```
+
+## 1.1. Nhập dữ liệu:
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=FALSE}
+#setwd("D:/Tài liệu sinh viên/Năm 4/HK1/MHTK 2024/Đồ án kết thúc học phần/datasets")
+data <- read.csv("life_expectancy.csv")
+attach(data)
+
+
+
+```
+
+## 1.2. Làm sạch dữ liệu
+
+```{r}
+head(data)
+str(data)
+dim(data)
+
+View(data)
+```
+
+### 1.2.1. Dữ liệu khuyết
+
+```{r}
+names(data)
+# Trực quan hóa các giá trị khuyết
+aggr(data, numbers = TRUE, sortVars = TRUE, cex.axis = 0.7,
+     gap = 3, col = c("navyblue", "red"),
+     main = "Missing Data Pattern")
+colSums(is.na(data))
+```
+
+Ta nhận thấy 3 biến Population, Hepatitis.B, GDP có rất nhiều dữ liệu khuyết. Nếu tiếp tục phân tích có thể làm sai lệch trong việc phân tích dữ liệu nên ta quyết định bỏ 3 biến này khỏi dữ liệu.
+
+```{r}
+data <- data[, !colnames(data) %in% c("Population", "Hepatitis.B", "GDP")]
+dim(data)
+```
+
+## Xử lý dữ liệu khuyết và kiểm tra lại
+
+```{r}
+## Xử lý dữ liệu khuyết
+
+library("zoo")
+library("dplyr")
+
+data_filled <- data
+
+
+# Chạy vòng lặp qua các biến số
+for (var in colnames(data_filled)) {
+  # Kiểm tra nếu biến là kiểu số
+  if (is.numeric(data_filled[[var]])) {
+    # Nếu giá trị đầu tiên là NA, thay bằng giá trị trung bình của biến
+    if (is.na(data_filled[[var]][1])) {
+      data_filled[[var]][1] <- mean(data_filled[[var]], na.rm = TRUE)
+    }
+    # Sử dụng nội suy cho các giá trị NA còn lại
+    data_filled[[var]] <- na.approx(data_filled[[var]], na.rm = FALSE)
+  }
+}
+# Duyệt qua từng biến trong data_filled
+data_filled <- data_filled %>%
+  mutate(across(where(is.numeric), ~ ifelse(is.na(.), mean(., na.rm = TRUE), .)))
+
+colSums(is.na(data_filled))
+```
+
+Ta đã xử lý tất cả các dữ liệu khuyết, ta sẽ xem thử hàm mật độ của các biến rất nhiều giá trị khuyết lúc đầu để đánh giá xem xử lý có tối ưu hay chưa.
+
+```{r}
+par(mfrow=c(1, 2))
+
+# Vẽ hàm mật độ cho dữ liệu ban đầu
+plot(density(data$Alcohol, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu ban đầu", 
+     xlab = "Alcohol", 
+     ylab = "Mật độ", 
+     col = "blue", 
+     lwd = 2)
+# Vẽ hàm mật độ cho dữ liệu đã xử lý
+plot(density(data_filled$Alcohol, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu đã xử lý", 
+     xlab = "Alcohol", 
+     ylab = "Mật độ", 
+     col = "red", 
+     lwd = 2)
+
+par(mfrow=c(1, 2))
+
+# Vẽ hàm mật độ cho dữ liệu ban đầu
+plot(density(data$BMI, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu ban đầu", 
+     xlab = "BMI", 
+     ylab = "Mật độ", 
+     col = "blue", 
+     lwd = 2)
+# Vẽ hàm mật độ cho dữ liệu đã xử lý 
+plot(density(data_filled$BMI, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu đã xử lý", 
+     xlab = "BMI", 
+     ylab = "Mật độ", 
+     col = "red", 
+     lwd = 2)
+
+par(mfrow=c(1, 2))
+
+# Vẽ hàm mật độ cho dữ liệu ban đầu
+plot(density(data$Life.expectancy, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu ban đầu", 
+     xlab = "Life.expectancy", 
+     ylab = "Mật độ", 
+     col = "blue", 
+     lwd = 2)
+# Vẽ hàm mật độ cho dữ liệu đã xử lý 
+plot(density(data_filled$Life.expectancy, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu đã xử lý", 
+     xlab = "Life.expectancy", 
+     ylab = "Mật độ", 
+     col = "red", 
+     lwd = 2)
+
+par(mfrow=c(1, 2))
+
+# Vẽ hàm mật độ cho dữ liệu ban đầu
+plot(density(data$Total.expenditure, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu ban đầu", 
+     xlab = "Total.expenditure", 
+     ylab = "Mật độ", 
+     col = "blue", 
+     lwd = 2)
+# Vẽ hàm mật độ cho dữ liệu đã xử lý
+plot(density(data_filled$Total.expenditure, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu đã xử lý", 
+     xlab = "Total.expenditure", 
+     ylab = "Mật độ", 
+     col = "red", 
+     lwd = 2)
+
+par(mfrow=c(1, 2))
+
+# Vẽ hàm mật độ cho dữ liệu ban đầu
+plot(density(data$Income.composition.of.resources, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu ban đầu", 
+     xlab = "Income.composition.of.resources", 
+     ylab = "Mật độ", 
+     col = "blue", 
+     lwd = 2)
+# Vẽ hàm mật độ cho dữ liệu đã xử lý
+plot(density(data_filled$Income.composition.of.resources, na.rm = TRUE), 
+     main = "Hàm mật độ - Dữ liệu đã xử lý", 
+     xlab = "Income.composition.of.resources", 
+     ylab = "Mật độ", 
+     col = "red", 
+     lwd = 2)
+```
+
+## Kiểm tra các biến có dạng character
+
+```{r}
+# Kiểm tra kiểu dữ liệu của tất cả các biến trong data_filled
+sapply(data_filled, class)
+# Lọc ra các cột có kiểu dữ liệu 'integer' hoặc 'character'
+character_columns <- names(data_filled)[sapply(data_filled, is.character)]
+print("Cột có kiểu character:")
+print(character_columns)
+```
+
+## Chuyển đổi biến
+
+```{r}
+data_filled$Country <- as.factor(data_filled$Country)
+data_filled$Status <- as.factor(data_filled$Status)
+data_filled$Year <- as.factor(data_filled$Year)
+str(data_filled)
+```
+
+Ta sẽ bỏ biến Country vì có tới 193 quốc gia được thu thập. Nếu phân tích sẽ rất phức tạp nên ta quyết định bỏ biến.
+
+```{r}
+data_filled<- data_filled[, !names(data_filled) %in% c("Country")]
+str(data_filled)
+```
+
+## Vẽ boxplot kiểm tra ngoại lai
+
+```{r}
+# Chuyển data_filled sang dạng long để vẽ nhiều biến cùng lúc
+library(tidyr)
+library(ggplot2)
+
+# Chỉ chọn các cột số
+numeric_data <- data_filled[sapply(data_filled, is.numeric)]
+
+# Chuyển sang dạng long
+data_long <- numeric_data %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+# Vẽ boxplot
+ggplot(data_long, aes(x = Variable, y = Value)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Boxplot for Numeric Variables", x = "Variables", y = "Values")
+```
+
+Ta thấy có rất nhiều giá trị ngoại lai trong dữ liệu.
+
+## Kiểm tra ngoại lai
+
+```{r}
+## Kiếm tra ngoại lai
+count_outliers <- function(A) {
+  # Hàm để tính toán số ngoại lai của một biến
+  calculate_outliers <- function(x) {
+    if (!is.numeric(x)) {
+      return(NA)  # Nếu biến không phải là numeric, trả về NA
+    }
+    
+    Q1 <- quantile(x, 0.25, na.rm = TRUE)
+    Q3 <- quantile(x, 0.75, na.rm = TRUE)
+    IQR <- Q3 - Q1
+    
+    lower_bound <- Q1 - 1.5 * IQR
+    upper_bound <- Q3 + 1.5 * IQR
+    
+    # Đếm số ngoại lai
+    outliers <- sum(x < lower_bound | x > upper_bound, na.rm = TRUE)
+    return(outliers)
+  }
+  
+  # Tính số ngoại lai và tổng số quan sát không phải NA cho từng biến
+  outlier_counts <- sapply(A, calculate_outliers)
+  total_counts <- sapply(A, function(x) sum(!is.na(x)))
+  
+  # Tính tỷ lệ ngoại lai
+  outlier_ratios <- outlier_counts / total_counts
+  
+  # Tạo data frame với tên biến, số lượng ngoại lai, và tỷ lệ ngoại lai
+  result <- data.frame(
+    Variable = names(outlier_counts),
+    Outliers = outlier_counts,
+    Outlier_Ratio = outlier_ratios * 100
+  )
+  
+  return(result)
+}
+# Gọi hàm để kiểm tra số lượng ngoại lai trong dữ liệu
+outlier_results <- count_outliers(data_filled)
+print(outlier_results)
+```
+
+Ta thấy có một số biến có rất nhiều giá trị ngoại lai nếu xóa sẽ làm mất đi đặc điểm của bộ dữ liệu nên ta sẽ thay bằng ngưỡng IQR để giảm thiểu tác động của các giá trị ngoại lai.
+
+```{r}
+## Thay giá trị ngoại lai
+
+handle_outliers <- function(data, k = 1.5) {
+  # Chọn các cột số trong dữ liệu
+  numeric_columns <- sapply(data, is.numeric)
+  
+  # Duyệt qua các cột số
+  for (col_name in names(data)[numeric_columns]) {
+    x <- data[[col_name]]
+    
+    # Tính các phân vị 25 và 75
+    q75 <- quantile(x, 0.75, na.rm = TRUE)
+    q25 <- quantile(x, 0.25, na.rm = TRUE)
+    
+    # Tính IQR
+    IQR <- q75 - q25
+    
+    # Tính giới hạn dưới và trên
+    lower_bound <- q25 - k * IQR
+    upper_bound <- q75 + k * IQR
+    
+    # Thay thế các giá trị ngoại lai bằng giới hạn
+    data[[col_name]] <- ifelse(x < lower_bound, lower_bound, 
+                               ifelse(x > upper_bound, upper_bound, x))
+  }
+  
+  return(data)
+}
+data_cleaned <- handle_outliers(data_filled, k = 1.5)
+# Kiểm tra kết quả sau khi thay thế ngoại lai
+outlier_results <- count_outliers(data_cleaned)
+print(outlier_results)
+```
+
+## Vẽ boxplot kiểm tra lại ngoại lai
+
+```{r}
+# Chỉ chọn các cột số
+numeric_data <- data_cleaned[sapply(data_cleaned, is.numeric)]
+
+# Chuyển sang dạng long
+data_long <- numeric_data %>%
+  pivot_longer(cols = everything(), names_to = "Variable", values_to = "Value")
+
+# Vẽ boxplot
+ggplot(data_long, aes(x = Variable, y = Value)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Boxplot for Numeric Variables", x = "Variables", y = "Values")
+```
+
+Ta đã xử lý hết tất cả các giá trị ngoại lai.
+
+## Trực quan hóa dữ liệu (EDA)
+
+```{r}
+library(tidyverse)
+data_cleaned %>%
+    gather(key = "value_groups", value = "value") %>%
+    filter(!is.na(value) & grepl("^[0-9.]+$", value)) %>% # Kiểm tra giá trị chỉ chứa số
+    mutate(value = as.numeric(value)) %>%
+    ggplot(aes(x = value)) +
+    geom_histogram(color = "pink", fill = "blue", bins = 30) +
+    facet_wrap(. ~ value_groups, scales = "free") +
+    labs(title = "Distribution of PredictCancerMR Data Variables")
+```
+
+## Vẽ boxplot cho biến Year và Status theo Life.expectancy
+
+```{r}
+p<-ggplot(data_cleaned,aes(x = Year, y = Life.expectancy, fill = Year))
+p + geom_boxplot()
+```
+
+Ta thấy Life.expectancy theo từng năm không có sự chênh lệch quá nhiều.
+
+```{r}
+p<-ggplot(data_cleaned,aes(x = Status, y = Life.expectancy, fill = Status))
+p + geom_boxplot()
+```
+
+```{r}
+ggplot(data_cleaned) +
+  geom_boxplot(mapping = aes(x = Year, y = Life.expectancy, fill = Status), 
+               alpha = 0.5, position = position_dodge()) +  # Vẽ boxplot
+  labs(title = "Phân phối Life.expectancy theo Year và Status",
+       x = "Year",
+       y = "Life.expectancy") +
+  theme_minimal()
+```
+
+Ta thấy không có sự tương tác giữa Years và Status nhưng 2 biến này có ảnh hưởng đến biến Life.expectancy.
+
+## Vẽ biểu đồ phân tán để quan sát sự tương quan với các biến
+
+```{r}
+par(mfrow=c(1, 2))
+plot(Life.expectancy~Adult.Mortality ,xlab="Adult.Mortality ",ylab="Life.expectancy",col="blue")
+plot(Life.expectancy~infant.deaths ,xlab="infant.deaths ",ylab="Life.expectancy",col="blue")
+
+par(mfrow=c(1, 2))
+
+plot(Life.expectancy~percentage.expenditure ,xlab="percentage.expenditure ",ylab="Life.expectancy",col="blue")
+plot(Life.expectancy~Diphtheria ,xlab="Diphtheria ",ylab="Life.expectancy",col="blue")
+
+par(mfrow=c(1, 2))
+
+plot(Life.expectancy~HIV.AIDS ,xlab="HIV.AIDS ",ylab="Life.expectancy",col="blue")
+plot(Life.expectancy~Schooling ,xlab="Schooling ",ylab="Life.expectancy",col="blue")
+```
+
+Ta thấy các biến này có mối quan hệ tuyến tính với biến Life.expectancy. Ta dự đoán các biến này có ảnh hưởng đến biến Life.expectancy.
+
+## Chia dữ liệu thành 2 phần
+
+```{r}
+set.seed(123)
+sample_size <- floor(0.8 * nrow(data_cleaned))
+train_index <- sample(seq_len(nrow(data_cleaned)), size = sample_size)
+train_data <- data_cleaned[train_index, ]
+validation_data <- data_cleaned[-train_index, ]
+dim(train_data)
+```
+
+## Kiểm tra hiện tượng đa cộng tuyến
+
+```{r}
+## Kiểm tra hiện tượng đa cộng tuyến
+car::vif(lm(Life.expectancy ~ ., data = train_data))
+```
+
+Ta thấy 2 biến infant.deaths và under.five.deaths có hệ số VIF\>10. Nên đầu tiên ta sẽ bỏ biến under.five.deaths và kiểm tra lại hiện tượng đa cộng tuyến.
+
+```{r}
+train_data <- train_data[, !names(train_data) %in% c("under.five.deaths")]
+validation_data <- validation_data[, !names(validation_data) %in% c("under.five.deaths")]
+car::vif(lm(Life.expectancy ~ ., data = train_data))
+```
+
+Ta thấy các biến đều có hệ số VIF\<5 khi bỏ biến under.five.deaths.
+
+## BIC
+
+```{r}
+modelBIC<- MASS::stepAIC(lm(train_data$Life.expectancy ~.,data=train_data),
+                         direction = "backward", k = log(nrow(train_data)))
+summary(modelBIC)
+```
+
+Ta thấy tỷ lệ giải thích phương sai của mô hình BIC là 84.12%. Ta sẽ thử chạy mô hình đầy đủ vì trong mô hình BIC không có biến Year.
+
+```{r}
+summary(lm(Life.expectancy ~., data=train_data))
+```
+
+Ta thấy mô hình đầy đủ giải thích 84.43% tỷ lệ phương sai cho biến phụ thuộc. Tức là nếu có cho thêm biến Years vào thì tỉ lệ giải thích phương sai cho biến phụ thuộc được tăng thêm rất ít nên ta quyết định sử dụng mô hình BIC để phân tích.
+
+## Kiểm tra giả thuyết chuẩn
+
+```{r}
+# Vẽ chỉ biểu đồ Normal Q-Q
+qqnorm(residuals(modelBIC), 
+       main = "QQ Plot of Residuals")
+qqline(residuals(modelBIC), 
+       col = "red", 
+       lwd = 2)
+shapiro.test(residuals(modelBIC))
+```
+
+## Kiểm tra tính độc lập của sai số
+
+```{r}
+car::durbinWatsonTest(modelBIC)
+```
+
+## Tính tuyến tính
+
+H0: Kỳ vọng của Sai số bằng 0
+
+H1: Kỳ vọng của Sai số khác 0
+
+```{r}
+t=t.test(modelBIC$residuals,alternative = c("two.sided"),
+ mu=0, conf.level = 0.95)
+t$p.value
+```
+
+## Tính đồng nhất của phương sai
+
+```{r}
+t=bptest(modelBIC)  
+t$p.value
+```
+
+## Boxcox
+
+```{r}
+## Thực hiện boxcox
+library(MASS)
+
+boxcox_transform=function(x,lambda)
+{
+  if (lambda==0)
+  {
+    return(log(x))
+  } else
+  {
+    return(((x^lambda)-1)/lambda)
+  }
+}
+
+#Xác định lambda tối ưu
+
+boxcox_mod<-boxcox(modelBIC,plotit = TRUE,xlab = expression(lambda),
+                   ylab = "log-Likelihood")
+#In ra cac lambda va gia tri ham log-likelihood
+df=data.frame(boxcox_mod)
+print(df[order(df$y,decreasing = T),])
+
+#Trích ra lambda tối ưu
+optimal_lambda=boxcox_mod$x[which.max(boxcox_mod$y)]
+optimal_lambda
+
+
+# Áp dụng Box-Cox với lambda tối ưu vào cột 'Life.expectancy'
+train_data$Life.expectancy_boxcox <- (train_data$Life.expectancy^optimal_lambda - 1) / optimal_lambda
+```
+
+## Boxcox Model
+
+```{r}
+# Xây dựng mô hình với dữ liệu đã biến đổi
+modelBIC2_boxcox<- lm(formula = train_data$Life.expectancy_boxcox~ Status + Adult.Mortality + 
+    infant.deaths + percentage.expenditure + Diphtheria + HIV.AIDS + 
+    thinness.5.9.years + Income.composition.of.resources + Schooling, 
+    data = train_data)
+summary(modelBIC2_boxcox)
+```
+
+# Kiểm tra tính chuẩn
+
+```{r}
+# Vẽ chỉ biểu đồ Normal Q-Q
+qqnorm(residuals(modelBIC2_boxcox), 
+       main = "QQ Plot of Residuals")
+qqline(residuals(modelBIC2_boxcox), 
+       col = "red", 
+       lwd = 2)
+shapiro.test(residuals(modelBIC2_boxcox))
+```
+
+## Kiểm tra tính độc lập của sai số
+
+```{r}
+car::durbinWatsonTest(modelBIC2_boxcox)
+```
+
+## Tính tuyến tính
+
+H0: Kỳ vọng của Sai số bằng 0
+
+H1: Kỳ vọng của Sai số khác 0
+
+```{r}
+
+t=t.test(modelBIC2_boxcox$residuals,alternative = c("two.sided"),  mu=0, conf.level = 0.95) 
+t$p.value
+```
+
+## Tính đồng nhất của phương sai
+
+```{r}
+
+t=bptest(modelBIC2_boxcox)   
+t$p.value
+```
+
+## Hồi Quy ROBUST với dữ liệu đã xử lý ngoại lai
+
+```{r}
+robust_model_term <- rlm(formula = train_data$Life.expectancy ~ Status + Adult.Mortality + 
+    infant.deaths + percentage.expenditure + Diphtheria + HIV.AIDS + 
+    thinness.5.9.years + Income.composition.of.resources + Schooling, 
+    data = train_data)
+summary(robust_model_term)
+```
+
+## Dự báo
+
+```{r}
+predict_and_evaluate <- function(model, newdata, actual_col) {
+  predicted <- predict(model, newdata)
+  actual <- newdata[[actual_col]]
+  
+  mae_val <- mae(actual, predicted)
+  rmse_val <- rmse(actual, predicted)
+  
+  cat("MAE:", mae_val, "\nRMSE:", rmse_val, "\n")
+  
+  ggplot(data.frame(Actual = actual, Predicted = predicted), aes(x = Actual, y = Predicted)) +
+    geom_point(color = "blue", alpha = 0.6) +
+    geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+    labs(title = "Actual vs Predicted Values",
+         x = "Actual Values",
+         y = "Predicted Values") +
+    theme_minimal()
+}
+
+# Gọi hàm cho validation_data
+predict_and_evaluate(robust_model_term, validation_data, "Life.expectancy")
+```
+
+## Độ chính xác trên train - data
+
+```{r}
+new_data<-train_data
+# Dự báo giá trị từ mô hình với dữ liệu mới
+pred_new_data <- predict(robust_model_term, newdata = new_data)
+
+# Hiển thị kết quả dự báo
+head(pred_new_data)
+# Dự báo giá trị cho dữ liệu hiện tại
+pred_reduced <- robust_model_term$fitted.values
+
+# Kiểm tra kết quả dự báo
+head(pred_reduced)
+# Tính độ chính xác cho bộ dữ liệu mới
+actual_fitted_new_data <- data.frame(actual = new_data$Life.expectancy, predicted = pred_new_data)
+abs_diff_new_data <- mean(abs(actual_fitted_new_data$actual - actual_fitted_new_data$predicted) / actual_fitted_new_data$actual)
+
+# Độ chính xác của mô hình trên bộ dữ liệu mới
+accuracy_new_data <- 1 - abs_diff_new_data
+accuracy_new_data
+```
+
+Mô hình có độ chính xác 95,7% phù hợp với việc dự đoán.
+
+## Độ chính xác trên validation-data
+
+```{r}
+new_data<-validation_data
+# Dự báo giá trị từ mô hình với dữ liệu mới
+pred_new_data <- predict(robust_model_term, newdata = new_data)
+
+# Hiển thị kết quả dự báo
+head(pred_new_data)
+# Dự báo giá trị cho dữ liệu hiện tại
+pred_reduced <- robust_model_term$fitted.values
+
+# Kiểm tra kết quả dự báo
+head(pred_reduced)
+# Tính độ chính xác cho bộ dữ liệu mới
+actual_fitted_new_data <- data.frame(actual = new_data$Life.expectancy, predicted = pred_new_data)
+abs_diff_new_data <- mean(abs(actual_fitted_new_data$actual - actual_fitted_new_data$predicted) / actual_fitted_new_data$actual)
+
+# Độ chính xác của mô hình trên bộ dữ liệu mới
+accuracy_new_data <- 1 - abs_diff_new_data
+accuracy_new_data
+```
+
+Độ chính xác 95.8%
+
+## Hồi Quy ROBUST với dữ liệu không xử lý ngoại lai
+
+Xây dựng mô hình ROBUST trên bộ dữ liệu đầy đủ và chưa xử lý ngoại lai.
+
+```{r}
+
+robust_model_term1 <- rlm(formula = data_filled$Life.expectancy ~ Status + Adult.Mortality +      infant.deaths + percentage.expenditure + Diphtheria + HIV.AIDS + thinness.5.9.years + Income.composition.of.resources + Schooling,data = data_filled) 
+
+summary(robust_model_term1)
+```
+
+## Dự báo trên data_filled
+
+```{r}
+predict_and_evaluate <- function(model, newdata, actual_col) {
+  predicted <- predict(model, newdata)
+  actual <- newdata[[actual_col]]
+  
+  mae_val <- mae(actual, predicted)
+  rmse_val <- rmse(actual, predicted)
+  
+  cat("MAE:", mae_val, "\nRMSE:", rmse_val, "\n")
+  
+  ggplot(data.frame(Actual = actual, Predicted = predicted), aes(x = Actual, y = Predicted)) +
+    geom_point(color = "blue", alpha = 0.6) +
+    geom_abline(intercept = 0, slope = 1, color = "red", linetype = "dashed") +
+    labs(title = "Actual vs Predicted Values",
+         x = "Actual Values",
+         y = "Predicted Values") +
+    theme_minimal()
+}
+
+# Gọi hàm cho validation_data
+predict_and_evaluate(robust_model_term1, data_filled, "Life.expectancy")
+```
+
+## Độ chính xác trên data_filled
+
+```{r}
+new_data<-data_filled
+# Dự báo giá trị từ mô hình với dữ liệu mới
+pred_new_data <- predict(robust_model_term1, newdata = new_data)
+
+# Hiển thị kết quả dự báo
+head(pred_new_data)
+# Dự báo giá trị cho dữ liệu hiện tại
+pred_reduced <- robust_model_term1$fitted.values
+
+# Kiểm tra kết quả dự báo
+head(pred_reduced)
+# Tính độ chính xác cho bộ dữ liệu mới
+actual_fitted_new_data <- data.frame(actual = new_data$Life.expectancy, predicted = pred_new_data)
+abs_diff_new_data <- mean(abs(actual_fitted_new_data$actual - actual_fitted_new_data$predicted) / actual_fitted_new_data$actual)
+
+# Độ chính xác của mô hình trên bộ dữ liệu mới
+accuracy_new_data <- 1 - abs_diff_new_data
+accuracy_new_data
+```
+
+Mô hình có độ chính xác 95,12% phù hợp với việc dự đoán.
+
+## So sánh mô hình ROBUST trên dữ liệu ban đầu và đã xử lý ngoại lai
+
+Mô hình ROBUST trên bộ dữ liệu đã xử lý ngoại lai và bộ dữ liệu ban đầu lần lượt là
+
+```{r}
+summary(robust_model_term)
+summary(robust_model_term1)
+```
+
+Độ chính xác lần lượt là:
+
+-   95,7%(trên train-data) và 95.8%(trên validation-data) đối với mô hình xây dựng trên tập dữ liệu đã xử lý ngoại lai.
+
+-   95,12% đối với mô hình xây dựng trên tập dữ liệu đầy đủ và không xử lý ngoại lai.
+
+Ta thấy rằng mô hình hồi quy ROBUST cho kết quả mô hình có độ chính xác không chênh lệch quá nhiều. Điều này cho thấy rằng hồi quy ROBUST chẳng những không đòi hỏi giả định mô hình quá nghiêm ngặt, mà mô hình còn khá mạnh mẽ khi không bị ảnh hưởng quá nhiều bởi sự có mặt của dữ liệu ngoại lai trong bộ dữ liệu.
