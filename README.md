@@ -18,4 +18,4 @@ More details are in this [Report](https://github.com/taitran0102/House-price-ana
 ### References:
 Here are the reference links for all the techniques I used in this projects.
 
-[Bayesian Network](https://www.bnlearn.com/)
+[Bayesian Network](https://www.bnlearn.com/book-crc-2ed/)
