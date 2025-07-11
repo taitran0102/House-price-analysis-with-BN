@@ -12,5 +12,5 @@ This project applies **Bayesian Networks** (Directed Graphical Models) to model 
 |---|---|---|---|
 
 ### Results: 
-More details are in this [Report](https://github.com/taitran0102/Life-Expectancy/blob/main/report_latex/Report.pdf)
+More details are in this [Report](https://github.com/taitran0102/House-price-analysis-with-BN/blob/main/report_latex/Report.pdf)
 
