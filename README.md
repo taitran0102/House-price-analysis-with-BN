@@ -13,6 +13,15 @@ This project applies **Bayesian Networks** (Directed Graphical Models) to model 
 ##### ⚙️ Preliminaries
 (*You can continue from here...*)
 
+#### Introduction:
+
+#### Project summary:
+|Step| Description | Key Techniques | Tools|
+|---|---|---|---|
+
+#### Results: 
+
+More details are in this [Report](https://github.com/taitran0102/Life-Expectancy/blob/main/report_latex/Report.pdf)
 ---
 ##### Phase 1
 
