@@ -28,7 +28,7 @@ Here are the reference links for all the techniques I used in this projects.
 - [data](./data): Raw and cleaned data used in the project
 
 #### 📊 Results
-See the full [Report](5_Result) with methodology, visuals, and insights.
+See the full [Report](5_Result/Report.md) with methodology, visuals, and insights.
 
 
 
