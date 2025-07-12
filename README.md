@@ -8,5 +8,5 @@ This project was originally done as part of a specialized seminar course during 
 plot(model2network(c("[x][y|x][z|y]")))
 ```
 <p align="center">
-  <img src="figures/plot_001.png" alt="Biểu đồ mẫu" width="500"/>
+  <img src="[figures/plot_001.png](https://github.com/taitran0102/House-price-analysis/blob/main/figures/unnamed-chunk-29-2.png)" alt="Biểu đồ mẫu" width="500"/>
 </p>
