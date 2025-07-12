@@ -4,3 +4,6 @@ This project was originally done as part of a specialized seminar course during 
 #### Key takeaways
 
 
+```{r}
+plot(model2network(c("[x][y|x][z|y]")))
+```
