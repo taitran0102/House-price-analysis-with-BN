@@ -1,0 +1,503 @@
+---
+title: "Ứng dụng của mô hình đồ thị có hướng"
+output:
+  html_document:
+    toc: true
+    df_print: paged
+  html_notebook:
+    toc: true
+    fig_width: 3
+    fig_height: 3
+    fig_caption: true
+  pdf_document:
+    toc: true
+editor_options:
+  chunk_output_type: inline
+---
+```{r setup, include=FALSE}
+dir.create("figures", showWarnings = FALSE)  # ép tạo thư mục
+knitr::opts_chunk$set(fig.path = "figures/")  # áp dụng toàn cục
+```
+
+Main code from here
+
+# 7.1. Mô tả bộ dữ liệu
+
+Đoạn code để xuất file với tên quận dầy đủ
+```{r eval=FALSE, warning=FALSE, include=FALSE}
+# Bước 2: Đặt lại tên levels cho district
+# levels(data$district) <- c(
+#   "Allach-Untermenzing",
+#   "Altstadt-Lehel",
+#   "Au-Haidhausen",
+#   "Aubing-Lochhausen-Langwied",
+#   "Berg am Laim",
+#   "Bogenhausen",
+#   "Feldmoching-Hasenbergl",
+#   "Hadern",
+#   "Laim",
+#   "Ludwigsvorstadt-Isarvorstadt",
+#   "Maxvorstadt",
+#   "Milbertshofen-Am Hart",
+#   "Moosach",
+#   "Neuhausen-Nymphenburg",
+#   "Obergiesing",
+#   "Pasing-Obermenzing",
+#   "Ramersdorf-Perlach",
+#   "Schwabing-West",
+#   "Schwabing-Freimann",
+#   "Schwanthalerhoehe",
+#   "Sendling",
+#   "Sendling-Westpark",
+#   "Thalkirchen-Obersendling-Forstenried-Fuerstenried-Solln",
+#   "Trudering-Riem",
+#   "Untergiesing-Harlaching"
+# )
+# 
+# # Bước 3: Xuất ra file CSV
+# write.csv(data, "munichrent03_full_district.csv", row.names = FALSE)
+```
+
+```{r}
+library(LinRegInteractive)
+data(munichrent03)
+data <- munichrent03 
+
+str(data)
+names(data)
+```
+
+```{r}
+summary(data)
+```
+Chỉ cần sử dụng một rentsqm vì rentsqm = rent * area
+```{r}
+round(data$rent[2]/data$area[2],2)
+data$rentsqm[2]
+round(data$rent[100]/data$area[100],2)
+data$rentsqm[100]
+```
+## Bỏ rent
+```{r}
+# (1) Bỏ biến rent
+data$rentsqm <- NULL
+```
+
+## Xem các biến rời rạc
+Top 7 quận nào có nhiều nhà nhất
+```{r}
+head(sort(table(data$district), decreasing = TRUE), 7)
+head(sort(table(data$district[data$location %in% c("top", "good")]), 
+          decreasing = TRUE),7)
+```
+Top 7 quận về tiêu chí nhà top+good
+```{r}
+head(sort(table(data$district[data$location %in% c("top", "good")]), 
+          decreasing = TRUE),7)
+```
+Bảy quận có nhiều căn hộ nhất là *Neuh-Nymp*, *Lud-Isar*, *Au-Haid*, *SchwWest*, *Maxvor*, *Laim* và *Ram-Per*. Tuy nhiên, khi xét riêng các căn hộ có vị trí tốt ("top" hoặc "good"), quận *Maxvor* vươn lên dẫn đầu, tiếp theo là *Neuh-Nymp* và *Lud-Isar*. Điều này cho thấy *Maxvor* không chỉ có số lượng căn hộ lớn mà còn có tỷ lệ cao các căn hộ ở vị trí tốt. Một số quận như *Schwab-Frei* và *Trud-Rie* dù không nằm trong top về tổng số căn hộ nhưng lại nổi bật về số căn hộ vị trí tốt, phản ánh chất lượng phân bố không gian có thể cao hơn ở những khu vực này.
+
+Xem tiện ích của các căn nhà
+```{r}
+library(dplyr)
+cols <- c("bathextra", "bathtile", "cheating", "upkitchen", "wwater")
+total_n <- nrow(data)
+feature_yes_count <- sapply(cols, function(col) {
+  sum(data[[col]] == "yes", na.rm = TRUE)
+}) |> unname()
+feature_summary <- data.frame(
+  Feature = cols,
+  Count = as.integer(feature_yes_count),
+  Percent = round(100 * feature_yes_count / total_n, 1)
+)
+print(feature_summary)
+```
+Top 7 quận với số nhà mang các tiện ích cao cấp
+```{r}
+head(sort(table(data$district[data$bathextra == "yes" &
+    data$cheating == "yes" &  data$upkitchen == "yes" &
+    data$wwater == "yes" &data$bathtile=="yes"
+    ]), decreasing = TRUE), 7)
+```
+Có thể thấy phần lớn căn hộ được trang bị các tiện nghi cơ bản: khoảng 96.5% có nước nóng (*wwater*), 91.5% có hệ thống sưởi trung tâm (*cheating*), và 81.5% có lát gạch trong phòng tắm (*bathtile*). Tuy nhiên, các tiện nghi cao cấp như trang bị nhà bếp cao cấp (*upkitchen*) và phòng tắm nâng cấp (*bathextra*) lại rất hiếm, chỉ chiếm lần lượt 7.3% và 9.3%. Khi xét các căn hộ có đầy đủ cả năm tiện nghi này, chỉ có một số ít nằm rải rác ở các quận như *Neuh-Nymp*, *Bogenh*, *Trud-Rie* và *Au-Haid*, mỗi nơi chỉ có từ 2 đến 6 căn hộ đạt chuẩn, cho thấy các căn hộ cao cấp là rất hiếm trong bộ dữ liệu.
+
+## Xem các biến liên tục
+```{r}
+#pdf("7.1.pdf", width = 6, height = 3)  # đơn vị là inch
+library(DataExplorer)
+plot_histogram(data)
+#dev.off()
+```
+
+```{r}
+shapiro.test(data$rent)
+shapiro.test(data$area)
+```
+Biến year không hẳn là liên tục vì xét theo từng năm rời rạc. Tương tự, biến rooms cũng vậy vì thống kê số phòng chỉ là các con số rời rạc.
+```{r}
+table(data$room)
+table(data$yearc)
+```
+
+# 7.2. Mục tiêu
+Phân tích các yếu tố Tiện nghi, Vị trí và Giá Thuê nhà tại thành phố Munich, bằng cách mô hình hóa các mối quan hệ bằng mô hình đồ thị có hướng.
+
+Hai biến rentsqm và area là liên tục (nhưng không chuẩn), ngoài trong bộ dữ liệu có đến 5 biến nhị phân là "bathextra" "bathtile"  "cheating"  "upkitchen" "wwater".
+```{r}
+names(data[-c(1,2,3,4,8,9)])
+```
+Đồng thời hai biến year và rooms như đã phân tích ở trên cũng có thể tiếp cận bằng cách rời rạc,v à số levels là rất lơn, ta cần thực hiện việc rút gọn số levels lại. Chính vì vậy, ta sẽ thực hiện phương pháp rời rạc hóa các biến liên tục và mô hình hóa các biến rời rạc thành một mô hình đồ thị có hướng rời rạc.
+ 
+# 7.3. Tiền xử lý dữ liệu
+# Thư viện
+```{r echo=TRUE, warning=FALSE}
+library(gRbase)
+library(Rgraphviz)
+library(bnlearn)
+library(gRain)
+library(ggm)
+library(igraph)
+```
+
+## Xử lý rooms và location
+Ta sẽ xem số lượng phòng từ 1 đến 6 chính là levels và chuyển rooms thành factor, còn biến location chuyển từ ordinal factor thành factor.
+```{r}
+data$rooms <- as.factor(data$rooms)
+data$location <- as.factor(as.character(data$location))
+```
+
+## Xử lý year
+```{r}
+#Lam tron nam
+data$yearc <- round(data$yearc)
+#Phan nhom
+data$year_group <- cut(data$yearc,
+  breaks = c(1917, 1959, 1969, 1989, 2001),
+  labels = c("1918-1959", "1960-1969", "1970-1989", "1990-2001"),right = TRUE)
+#Kiem tra lai so dong
+length(data$year_group) == nrow(data)
+```
+
+## Xử lý district
+Để xử lý biến này với mục tiêu rút gọn số levels và giữ được nhiều thông tin từ bộ dữ liệu, trước hết ta sẽ bố trí các quận vào các khu vực dựa vào: mật độ số căn hộ và vị trí địa lý.
+
+Tổng số căn nhà trong mỗi quận
+```{r}
+district_counts <- sort(table(data$district), decreasing = TRUE)
+district_counts
+district_ordered <- names(district_counts)
+```
+
+Khu vực 1:
+```{r}
+area1_index <- c(1, 2, 3, 4, 5, 6, 9 ,11, 12, 16, 21)
+district_ordered[area1_index]
+```
+
+Khu vực 2:
+
+```{r}
+area2_index <- c(7, 8, 10, 13, 14, 15, 17, 20, 22)
+district_ordered[area2_index]
+```
+
+Khu vực 3:
+
+```{r}
+area3_index <- setdiff(1:length(district_ordered), c(area1_index, area2_index))
+district_ordered[area3_index]
+```
+
+```{r}
+district_group_info <- data.frame(district = district_ordered,
+                                  group = NA)
+district_group_info$group[area1_index] <- "Area1"
+district_group_info$group[area2_index] <- "Area2"
+district_group_info$group[area3_index] <- "Area3"
+data$district_group <- 
+  district_group_info$group[match(data$district, district_group_info$district)]
+data$district_group <- as.factor(data$district_group)
+sum(table(data$district_group)) == nrow(data)
+```
+
+## Rời rạc hóa rent và area
+```{r}
+#discretize continuous data into factors.
+#discretize(data, method = c("quantile","interval","hartemink"), breaks = )
+#discretize(data, method = "hartemink", breaks = , ibreaks = , idisc = )
+```
+
+
+```{r}
+#Chuan bi bo du lieu cho roi rac hoa
+data_bn <- data[, !(names(data) %in% c("yearc", "district"))]
+data_bn$rent <- as.numeric(data_bn$rent)
+data_bn$area <- as.numeric(data_bn$area)
+#Roi rac hoa bang "hartemink"
+data_disc <- discretize(data_bn, method = "hartemink",breaks = 3,ibreaks = 60,
+                        idisc = "quantile")
+str(data_disc)
+```
+
+# 7.4. Tiêu chí đánh giá và chọn mô hình 
+
+# 7.5. Học cấu trúc DAG
+```{r}
+# boot.strength(data = , R = 300, 
+#               algorithm = c("pc.stable","hc","mmhc"),
+#               algorithm.args = list())
+```
+
+## Bootstrap 500 lần
+```{r warning=FALSE}
+set.seed(42)
+boot_pc <- boot.strength(data = data_disc, R = 500, algorithm = "pc.stable",
+                         algorithm.args = list(test = "mi"))
+boot_hc <- boot.strength(data = data_disc, R = 500, algorithm = "hc", 
+                         algorithm.args = list(score = "bic"))
+boot_mmhc <- boot.strength(data = data_disc, R = 500, algorithm = "mmhc")
+```
+
+## Trung bình hóa
+```{r}
+avgnet_pc <- averaged.network(boot_pc[boot_pc$direction>=0.5,], 
+                              threshold = 0.85)
+avgnet_hc <- averaged.network(boot_hc[boot_hc$direction>=0.5,], 
+                              threshold = 0.85)
+avgnet_mmhc <- averaged.network(boot_mmhc[boot_mmhc$direction>=0.5,], 
+                                threshold = 0.55)
+```
+
+## Tính các tiêu chí
+```{r}
+mean_strength <- function(strength, DAG) 
+  {arcs_net <- arcs(DAG)
+  matched_strength <- strength[
+    apply(strength[, c("from", "to")], 1, function(x)
+      any(apply(arcs_net, 1, function(y) all(x == y)))
+    ),]
+  mean(matched_strength$strength)
+  }
+results <- data.frame(
+  Algorithm = c("pc.stable", "hc", "mmhc"),
+  BIC = c(score(avgnet_pc,   data = data_disc, type = "bic"),
+          score(avgnet_hc,   data = data_disc, type = "bic"),
+          score(avgnet_mmhc, data = data_disc, type = "bic")),  
+  Egdes=c(dim(arcs(avgnet_pc))[1],
+          dim(arcs(avgnet_hc))[1],
+          dim(arcs(avgnet_mmhc))[1]),
+  Mean_Strength = c(mean_strength(boot_pc,   avgnet_pc),
+                    mean_strength(boot_hc,   avgnet_hc),
+                    mean_strength(boot_mmhc, avgnet_mmhc))
+  )
+results
+```
+
+Mỗi mô hình sẽ có một sự đánh đổi trong các tiêu chí, không mô hình nào là vượt trội ở cả 3 tiêu chí. Ta sẽ cần phải dựa vào khả năng diễn giải của các cấu trúc DAG.
+```{r}
+library(Cairo)
+#CairoPDF("models_alg.pdf", family = "Arial", width = 7, height = 5)
+graphviz.plot(avgnet_pc, main = "Averaged Model - pc.stable")
+graphviz.plot(avgnet_hc, main = "Averaged Model - hc")
+graphviz.plot(avgnet_mmhc, main = "Averaged Model - mmhc")
+#dev.off()
+```
+##Giảm ngưỡng về 75%
+
+```{r}
+avgnet_pc <- averaged.network(boot_pc[boot_pc$direction>=0.5,], 
+                              threshold = 0.75)
+avgnet_hc <- averaged.network(boot_hc[boot_hc$direction>=0.5,], 
+                              threshold = 0.75)
+avgnet_mmhc <- averaged.network(boot_mmhc[boot_mmhc$direction>=0.5,], 
+                                threshold = 0.75)
+graphviz.plot(avgnet_pc, main = "Averaged Model - pc.stable")
+graphviz.plot(avgnet_hc, main = "Averaged Model - hc")
+graphviz.plot(avgnet_mmhc, main = "Averaged Model - mmhc")
+```
+
+Xem khả năng diễn giải
+
+```{r}
+#library(Cairo)
+#CairoPDF("models_alg_1.pdf", family = "Arial", width = 7, height = 5)
+# graphviz.plot(avgnet_pc, main = "Averaged Model - pc.stable")
+# graphviz.plot(avgnet_hc, main = "Averaged Model - hc")
+# graphviz.plot(avgnet_mmhc, main = "Averaged Model - mmhc")
+#dev.off()
+```
+
+Tính lại các tiêu chí
+
+```{r}
+results <- data.frame(
+  Algorithm = c("pc.stable", "hc", "mmhc"),
+  BIC = c(score(avgnet_pc,   data = data_disc, type = "bic"),
+          score(avgnet_hc,   data = data_disc, type = "bic"),
+          score(avgnet_mmhc, data = data_disc, type = "bic")),  
+  Egdes=c(dim(arcs(avgnet_pc))[1],
+          dim(arcs(avgnet_hc))[1],
+          dim(arcs(avgnet_mmhc))[1]),
+  Mean_Strength = c(mean_strength(boot_pc,   avgnet_pc),
+                    mean_strength(boot_hc,   avgnet_hc),
+                    mean_strength(boot_mmhc, avgnet_mmhc))
+  )
+results
+```
+
+## Chốt mô hình hc và diễn giải
+
+Chọn mô hình cuối cùng là hc (trung bình hóa ngưỡng 75%)
+
+```{r}
+final_mod_dag=averaged.network(boot_hc[boot_hc$direction>=0.5,],threshold = 0.75)
+```
+
+Diễn giải.
+
+# 7.6. Học tham số mô hình
+
+```{r echo=TRUE, message=TRUE, warning=TRUE}
+fit = bn.fit(final_mod_dag, data = data_disc, method = "mle")
+```
+
+Kiểm tra có xác suất nào không ước lượng được hay không
+```{r}
+has_na <- sapply(fit, function(node) any(is.na(unlist(node$prob))))
+names(has_na)[has_na]
+```
+
+# 7.7. Suy diễn
+```{r}
+gr_fit <- as.grain(fit)
+```
+#Giá thuê
+
+1. Giá thuê bị ảnh hưởng trực tiếp và gián tiếp bởi những yếu tố nào?
+
+Mối quan hệ trực tiếp:
+
+```{r}
+parents(fit,"rent")
+children(fit,"rent")
+```
+Mối quan hệ gián tiếp:
+rooms thông qua area
+district_group và location thông qua year_group
+cheating và wwater thông qua year_group
+bathtile thông qua year_group
+
+2. Phân tích
+
+```{r}
+dsep(fit,"district_group","bathextra","rent")
+data_disc[c(18),][c(2,4,7:8,11,1)]
+```
+
+```{r}
+data_disc[c(114),][c(2,4,7:8,11,1)]
+```
+
+```{r}
+dsep(fit,"rent","rooms","area")
+```
+```{r}
+dsep(fit,"rent","location","year_group")
+dsep(fit,"rent","district_group","year_group")
+dsep(fit,"rent","cheating","year_group")
+```
+```{r}
+dsep(fit,"area","year_group")
+dsep(fit,"rooms","district_group")
+dsep(fit,"area","cheating")
+dsep(fit,"area","location")
+dsep(fit,"area","year_group","rent")
+dsep(fit,"rooms","district_group","rent")
+dsep(fit,"area","cheating","rent")
+dsep(fit,"area","location","rent")
+```
+
+```{r}
+library(lattice)
+districts <- levels(data_disc$district_group)
+loc_levels <- c("good", "top")
+distr <- do.call(rbind, lapply(districts, function(d) {
+  prob <- querygrain(setEvidence(gr_fit, evidence = list(district_group = d)), nodes = "location")$location
+  data.frame(District = d, Location = loc_levels, Prob = as.numeric(prob[loc_levels]))
+}))
+barchart(Location ~ Prob | District, data = distr,
+         layout = c(3, 1), xlab = "probability",
+         strip = strip.custom(factor.levels = paste("Pr(location |", districts, ")")),
+         col = c("gray40", "gray80"),
+         panel = function(...) {
+           panel.barchart(...)
+           panel.grid(h = 0, v = -1)
+         })
+#CairoPDF("locationtopgood_district.pdf", family = "Arial", width = 7, height = 5)
+#dev.off()
+```
+
+```{r}
+levels(data_disc$rent)
+cpquery(fit,event = rent %in% c("[77.31,406.132]","(406.132,687.072]"),
+        evidence = (district_group == "Area1"),
+        n = 10^5)
+cpquery(fit,event = rent %in% c("[77.31,406.132]","(406.132,687.072]"),
+        evidence = (district_group == "Area2"),
+        n = 10^5)
+cpquery(fit,event = rent %in% c("[77.31,406.132]","(406.132,687.072]"),
+        evidence = (district_group == "Area3"),
+        n = 10^5)
+```
+
+```{r}
+# # So can nha phan khuc gia thap
+# table(data_disc$district_group[data_disc$rent == "[77.31,406.132]"|data_disc$rent =="(406.132,687.072]"])
+# # So can nha moi khu vuc
+# table(data_disc$district_group)
+```
+
+```{r}
+querygrain(setEvidence(gr_fit, nodes = "cheating", states = "yes"),nodes = c("wwater"),type = "joint")
+```
+
+```{r}
+levels(data_disc$year_group)
+querygrain(setEvidence(gr_fit, nodes = "year_group", states = "1918-1959"),
+           nodes = c("cheating"),type = "joint")["yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "year_group", states = "1960-1969"),
+           nodes = c("cheating"),type = "joint")["yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "year_group", states = "1990-2001"),
+           nodes = c("cheating"),type = "joint")["yes"]
+```
+
+```{r}
+levels(data_disc$rent)
+querygrain(setEvidence(gr_fit, nodes = "year_group", states = "1918-1959"),
+           nodes = c("cheating"),type = "joint")["yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "year_group", states = "1960-1969"),
+           nodes = c("cheating"),type = "joint")["yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "year_group", states = "1990-2001"),
+           nodes = c("cheating"),type = "joint")["yes"]
+```
+
+```{r}
+querygrain(setEvidence(gr_fit, nodes = "rent", states = "[77.31,406.132]"),
+           nodes = c("upkitchen", "bathextra"), type = "joint")["yes","yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "rent", states = "(406.132,687.072]"),
+           nodes = c("upkitchen", "bathextra"), type = "joint")["yes","yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "rent", states = "(687.072,1789.55]"),
+           nodes = c("upkitchen", "bathextra"), type = "joint")["yes","yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "rent", states = "(687.072,1789.55]"),
+           nodes = c("upkitchen"), type = "joint")["yes"]
+
+querygrain(setEvidence(gr_fit, nodes = "rent", states = "(687.072,1789.55]"),
+           nodes = c("bathextra"), type = "joint")["yes"]
+```
