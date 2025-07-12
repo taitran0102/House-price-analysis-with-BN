@@ -10,3 +10,5 @@ plot(model2network(c("[x][y|x][z|y]")))
 <p align="center">
   <img src="https://github.com/taitran0102/House-price-analysis/blob/main/figures/unnamed-chunk-29-2.png" alt="Directed Graphical Models" width="500"/>
 </p>
+
+snd a d
