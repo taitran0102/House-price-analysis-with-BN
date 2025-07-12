@@ -16,3 +16,6 @@ Data cleaning|||
 </p>
 
 The results above show that rent is directly influenced by [factor A], indirectly influenced by [factor B] through [factor C], and that the joint distribution can be represented in the form:
+<p align="center">
+  <em>f(x,y,z)=f(x)f(y|x)f(z|x,y)</em>
+</p>
