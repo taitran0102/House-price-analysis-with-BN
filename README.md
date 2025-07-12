@@ -1,6 +1,4 @@
 # 🏠 House Price Analysis using Bayesian Networks - Project Summart
-#### Key takeaways
-
 #### Project Workflow
 | Step                     | Description                                               | Tools Used        |
 |---|---|---|
@@ -11,7 +9,7 @@
 | Feature Engineering      | Created additional variables                              | R                 |
 | Modeling     | Built the DGM                                  | R         |
 | Use the model| Querying the modeling to answer some questions | R| 
-
+#### Key takeaways
 
 #### Result
 
