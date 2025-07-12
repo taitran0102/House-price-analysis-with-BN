@@ -1,19 +1,19 @@
-SELECT * FROM Munich03
+SELECT * FROM taibd..Munich03
 -- Some lines have yearc as a decimal number
 SELECT yearc
-FROM Munich03
+FROM taibd..Munich03
 WHERE yearc IS NOT NULL AND yearc <> FLOOR(yearc);
 -- Overwrite yearc with its integer (floor) value
-UPDATE Munich03
+UPDATE taibd..Munich03
 SET yearc = FLOOR(yearc)
 WHERE yearc IS NOT NULL;
 -- No more
 SELECT yearc
-FROM Munich03
+FROM taibd..Munich03
 WHERE yearc IS NOT NULL AND yearc <> FLOOR(yearc);
 -- See NULL
 SELECT COUNT(*)
-FROM Munich03
+FROM taibd..Munich03
 WHERE 
     rent IS NULL OR
     rentsqm IS NULL OR
