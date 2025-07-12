@@ -1,4 +1,4 @@
-# 🏠 House Price Analysis using Bayesian Networks - Project Summart
+# Project Summary
 #### Project Workflow
 | Step                     | Description                                               | Tools Used        |
 |---|---|---|
