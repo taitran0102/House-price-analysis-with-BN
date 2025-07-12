@@ -11,5 +11,4 @@
 | Use the model| Querying the modeling to answer some questions | R| 
 #### Key takeaways
 
-#### Result
 
