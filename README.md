@@ -3,7 +3,7 @@
 
 #### Project Workflow
 | Step                     | Description                                               | Tools Used        |
-|---|---|--|
+|---|---|---|
 | Data Preparation         | Loaded data from CSV file                                 | R          |
 | Data Cleaning            | Fixed typos, removed duplicates, handled NULLs & outliers | SQL, R            |
 | Exploratory Analysis     | Analyzed distributions and relationships                  | ggplot2, dplyr    |
