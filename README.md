@@ -8,7 +8,7 @@ This project was originally done as part of a specialized seminar course during 
 #### Project Workflow
 | Step                     | Description                                               | Tools Used        |
 |---|---|---|
-| Data Preparation         | Get the dataset from a R package                               | R          |
+| Data Preparation         | [Get the dataset from a R package](https://github.com/taitran0102/House-price-analysis/tree/main/2_R)                              | R          |
 | Data Cleaning            | Fixed typos, removed duplicates, handled NULLs & outliers | SQL, R            |
 | Exploratory Analysis     | Analyzed distributions and relationships                  | ggplot2, dplyr    |
 | Result Visualization     | Visualized trends and findings                            | Power BI |
