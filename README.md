@@ -15,4 +15,4 @@ Data cleaning|||
   <em>Directed Graphical Models</em>
 </p>
 
-skandiaiof
+The results above show that rent is directly influenced by [factor A], and indirectly influenced by [factor B] through [factor C]
