@@ -1,5 +1,6 @@
 # Project Summary
 #### Introduction
+This project was originally done as part of a specialized seminar course during my studies. It was not uploaded to GitHub at the time, but I have now revisited and improved it by incorporating additional tools to better explore the dataset.
 #### Project Workflow
 | Step                     | Description                                               | Tools Used        |
 |---|---|---|
