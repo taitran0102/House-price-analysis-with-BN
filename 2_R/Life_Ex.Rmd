@@ -1,20 +1,31 @@
 ---
 title: "Life Expectancy Analysis"
 output:
-  html_notebook:
+  html_document: 
     toc: true
-    fig_width: 3
-    fig_height: 3
     fig_caption: true
-  html_document:
-    toc: true
-    df_print: paged
-  pdf_document:
-    toc: true
-editor_options:
+    fig_path: figures/
+#   pdf_document:
+#     toc: true
+#     fig_caption: true
+#     fig_path: "figures/"
+#   html_notebook:
+#     toc: true
+#     fig_width: 3
+#     fig_height: 3
+#     fig_caption: true
+#     fig_path: "figures/"
+# editor_options:
   chunk_output_type: inline
 ---
-
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  fig.path = "figures/",
+  fig.width = 3,
+  fig.height = 3,
+  fig.cap = TRUE
+)
+```
 # Library:
 
 ```{r echo=TRUE, message=FALSE, warning=FALSE}
