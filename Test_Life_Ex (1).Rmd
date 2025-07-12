@@ -9,6 +9,13 @@ output:
   word_document: default
 ---
 
+
+```{r setup, include=FALSE}
+dir.create("figures", showWarnings = FALSE)  # ép tạo thư mục
+knitr::opts_chunk$set(fig.path = "figures/")  # áp dụng toàn cục
+```
+
+
 ------------------------------------------------------------------------
 
 # 0. Libraries
