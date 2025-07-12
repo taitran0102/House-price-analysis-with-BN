@@ -7,3 +7,6 @@ This project was originally done as part of a specialized seminar course during 
 ```{r}
 plot(model2network(c("[x][y|x][z|y]")))
 ```
+<p align="center">
+  <img src="figures/plot_001.png" alt="Biểu đồ mẫu" width="500"/>
+</p>
