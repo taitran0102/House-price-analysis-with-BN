@@ -15,4 +15,4 @@ Data cleaning|||
   <em>Directed Graphical Models</em>
 </p>
 
-The results above show that rent is directly influenced by [factor A], and indirectly influenced by [factor B] through [factor C]
+The results above show that rent is directly influenced by [factor A], indirectly influenced by [factor B] through [factor C], and that the joint distribution can be represented in the form:
