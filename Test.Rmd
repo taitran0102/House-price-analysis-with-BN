@@ -15,8 +15,7 @@ dir.create("figures", showWarnings = FALSE)  # ép tạo thư mục
 knitr::opts_chunk$set(fig.path = "figures/")  # áp dụng toàn cục
 ```
 
-
-------------------------------------------------------------------------
+Main code from here
 
 # 0. Libraries
 
@@ -26,4 +25,10 @@ library(bnlearn)
 
 ```{r}
 plot(model2network(c("[x][y|x][z|y]")))
+```
+
+```{r}
+x=rnorm(100)
+y=rnorm(100,0.5,1)
+plot(x,y)
 ```
