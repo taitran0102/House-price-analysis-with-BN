@@ -1,0 +1,22 @@
+---
+title: "Test"
+author: ""
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+
+------------------------------------------------------------------------
+
+# 0. Libraries
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(bnlearn)
+```
+
+```{r}
+plot(model2network(c("[x][y|x][z|y]")))
+```
