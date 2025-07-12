@@ -11,5 +11,5 @@
 | Modeling (optional)      | Built predictive models                                   | R (lm)            |
 | Result Visualization     | Visualized trends and findings                            | ggplot2, R Markdown |
 
-
+#### Result
 
