@@ -11,7 +11,7 @@ plot(model2network(c("[x][y|x][z|y]")))
   <img src="https://github.com/taitran0102/House-price-analysis/blob/main/figures/unnamed-chunk-29-2.png" alt="Directed Graphical Models" width="500"/>
 </p>
 <p align="center">
-  <em>Hình 1: Sóng sin. Hình 2: Hàm mật độ chuẩn.</em>
+  <em>Directed Graphical Models</em>
 </p>
 
 snd a d
