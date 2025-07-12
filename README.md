@@ -1,6 +1,6 @@
 # Project Summary
 #### Introduction
-This project was originally done as part of a specialized seminar course during my studies. It was not uploaded to GitHub at the time, but I have now revisited and improved it by incorporating additional tools to better explore the dataset.
+This project was originally done as part of a specialized seminar course during my studies. It was not uploaded to GitHub at the time, but I have now revisited and improved it by incorporating additional tools to better explore the dataset. The dataset used in this project is a sampled subset of data originally collected to develop the Rental Price Index for Munich in 2003.
 #### Project Workflow
 | Step                     | Description                                               | Tools Used        |
 |---|---|---|
